@@ -67,34 +67,27 @@ RANDOM_STATE = 42
 READ_CHUNKSIZE = 500_000   # 한 파일을 이 줄 수 단위로 끊어 읽어 메모리 사용량을 제한
 
 def set_korean_font():
-    """OS별로 설치된 한글 폰트를 찾아 matplotlib에 적용 (없으면 기본 폰트 유지)"""
-    system = platform.system()
-    candidates = []
-    if system == "Windows":
-        candidates = ["Malgun Gothic"]
-    elif system == "Darwin":
-        candidates = ["AppleGothic"]
+    import urllib.request
+    import matplotlib.font_manager as fm
+    
+    font_path = "NanumGothic.ttf"
+    if not os.path.exists(font_path):
+        url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
+        try:
+            urllib.request.urlretrieve(url, font_path)
+        except Exception:
+            pass
+            
+    if os.path.exists(font_path):
+        fm.fontManager.addfont(font_path)
+        plt.rcParams["font.family"] = "NanumGothic"
     else:
-        candidates = ["NanumGothic", "NanumBarunGothic", "Noto Sans CJK KR"]
-
-    available = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
-    if system == "Windows":
-        if "Malgun Gothic" in available:
+        system = platform.system()
+        if system == "Windows":
             plt.rcParams["font.family"] = "Malgun Gothic"
-            plt.rcParams["font.sans-serif"] = ["Malgun Gothic"]
-        else:
-            print("[안내] Windows에서 Malgun Gothic 폰트를 찾지 못했습니다. 설치 후 다시 실행하세요.")
-            plt.rcParams["font.sans-serif"] = candidates
-    else:
-        for name in candidates:
-            if name in available:
-                plt.rcParams["font.family"] = name
-                plt.rcParams["font.sans-serif"] = [name]
-                break
-        else:
-            print("[안내] 한글 폰트를 찾지 못했습니다. 그래프의 한글이 깨질 수 있습니다.")
-            print("       (Linux의 경우 'sudo apt-get install fonts-nanum' 후 다시 실행해보세요)")
-            plt.rcParams["font.sans-serif"] = candidates
+        elif system == "Darwin":
+            plt.rcParams["font.family"] = "AppleGothic"
+            
     plt.rcParams["axes.unicode_minus"] = False
 
 

@@ -13,6 +13,32 @@ from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore")
 
+def set_korean_font():
+    import urllib.request
+    import matplotlib.font_manager as fm
+    
+    font_path = "NanumGothic.ttf"
+    if not os.path.exists(font_path):
+        url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
+        try:
+            urllib.request.urlretrieve(url, font_path)
+        except Exception:
+            pass
+            
+    if os.path.exists(font_path):
+        fm.fontManager.addfont(font_path)
+        plt.rcParams["font.family"] = "NanumGothic"
+    else:
+        system = platform.system()
+        if system == "Windows":
+            plt.rcParams["font.family"] = "Malgun Gothic"
+        elif system == "Darwin":
+            plt.rcParams["font.family"] = "AppleGothic"
+            
+    plt.rcParams["axes.unicode_minus"] = False
+
+set_korean_font()
+
 # =====================================================================
 # 1. Streamlit 테마 설정 및 스타일링 (다크 테마 & 에메랄드 네온 조합)
 # =====================================================================
@@ -390,12 +416,7 @@ with col2:
         fig, ax = plt.subplots(figsize=(8, 4), facecolor="#0E1117")
         ax.set_facecolor("#1E293B")
         
-        # 한국어 폰트 설정 우회 (글자 깨짐 방지)
-        system = platform.system()
-        if system == "Windows":
-            plt.rcParams["font.family"] = "Malgun Gothic"
-        elif system == "Darwin":
-            plt.rcParams["font.family"] = "AppleGothic"
+        # 전역 설정된 한글 폰트 적용
         
         ax.plot(temp_range, sim_predictions, color="#10B981", linewidth=3, label="예상 대여량")
         ax.scatter([mean_temp], [predicted_demand], color="#EF4444", s=150, zorder=5, label="현재 설정 기온")
@@ -419,11 +440,7 @@ with col2:
         fig, ax = plt.subplots(figsize=(8, 4.2), facecolor="#0E1117")
         ax.set_facecolor("#1E293B")
         
-        # 한글 폰트 설정
-        if system == "Windows":
-            plt.rcParams["font.family"] = "Malgun Gothic"
-        elif system == "Darwin":
-            plt.rcParams["font.family"] = "AppleGothic"
+        # 전역 설정된 한글 폰트 적용
             
         sns.barplot(
             x=[importances[i] for i in indices],
