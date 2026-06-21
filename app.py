@@ -25,6 +25,7 @@ st.set_page_config(
 
 # Custom CSS for Premium Design
 st.markdown("""
+<meta name="google" content="notranslate">
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700&display=swap');
     
@@ -310,7 +311,7 @@ with col1:
     
     # Glow KPI Card
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="kpi-card notranslate">
         <div class="kpi-title">선택한 날씨 조건 기반 예상 수요</div>
         <div class="kpi-value">{predicted_demand:,}<span class="kpi-unit">대</span></div>
     </div>
@@ -334,7 +335,7 @@ with col1:
     # 가이드 1: 주말 / 평일
     weekend_desc = "주말(토/일)로 여가 및 공원 나들이 목적의 대여 증가 요인이 존재합니다." if is_weekend_val else "평일로 직장인 출퇴근 및 등하교용 생활 밀착형 대여가 주를 이룰 것입니다."
     st.markdown(f"""
-    <div class="info-card">
+    <div class="info-card notranslate">
         <div class="info-title">📅 주중/주말 여부 : {"주말" if is_weekend_val else "평일"}</div>
         <div class="info-content">{weekend_desc}</div>
     </div>
@@ -343,7 +344,7 @@ with col1:
     # 가이드 2: 공휴일
     if is_holiday_val:
         st.markdown(f"""
-        <div class="info-card" style="border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.05);">
+        <div class="info-card notranslate" style="border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.05);">
             <div class="info-title" style="color: #F87171;">🎉 공휴일 여부 : 공휴일 지정일</div>
             <div class="info-content">공휴일입니다! 야외 활동 대여량은 폭증하지만, 일반 출퇴근 대여는 급감하는 경향을 보입니다.</div>
         </div>
@@ -352,14 +353,14 @@ with col1:
     # 가이드 3: 비/눈 정보
     if rain > 0:
         st.markdown(f"""
-        <div class="info-card" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.05);">
+        <div class="info-card notranslate" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.05);">
             <div class="info-title" style="color: #60A5FA;">☔ 강우 주의보 : {rain} mm</div>
             <div class="info-content">비가 예보되어 노면이 미끄러워집니다. 자전거 대여 건수가 평소 대비 급락할 확률이 높습니다.</div>
         </div>
         """, unsafe_allow_html=True)
     if snow > 0:
         st.markdown(f"""
-        <div class="info-card" style="border-color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.05);">
+        <div class="info-card notranslate" style="border-color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.05);">
             <div class="info-title" style="color: #F8FAFC;">❄️ 적설 주의보 : {snow} cm</div>
             <div class="info-content">눈이 쌓여 빙판길이 우려됩니다. 안전상의 이유로 대여 수요가 급감합니다.</div>
         </div>
