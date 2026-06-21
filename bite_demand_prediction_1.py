@@ -48,7 +48,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import PolynomialFeatures
-from ydata_profiling import ProfileReport
+#from ydata_profiling import ProfileReport
 
 warnings.filterwarnings("ignore")
 
@@ -386,8 +386,8 @@ plt.close()
 
 
 # EDA Report 생성 
-profile = ProfileReport(df, title="Bike Demand Data Profile", explorative=True)
-profile.to_file("output_data/bike_demand_profile.html")
+# profile = ProfileReport(df, title="Bike Demand Data Profile", explorative=True)
+# profile.to_file("output_data/bike_demand_profile.html")
 
 
 # In[127]:
