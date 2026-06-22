@@ -15,8 +15,17 @@ import joblib
 
 warnings.filterwarnings("ignore")
 
-# 폰트지정
-plt.rcParams['font.family'] = 'Malgun Gothic'
+# 폰트지정 (NanumGothic.ttf를 직접 등록하여 로컬 및 Streamlit Cloud 한글 깨짐 완전 방지)
+import matplotlib.font_manager as fm
+font_path = "NanumGothic.ttf"
+if os.path.exists(font_path):
+    fm.fontManager.addfont(font_path)
+    font_name = fm.FontProperties(fname=font_path).get_name()
+    plt.rcParams['font.family'] = font_name
+else:
+    plt.rcParams['font.family'] = 'Malgun Gothic'
+
+
 
 # 마이너스 부호 깨짐 지정
 plt.rcParams['axes.unicode_minus'] = False
