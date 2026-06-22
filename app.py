@@ -2,6 +2,7 @@ import glob
 import os
 import platform
 import warnings
+# pyrefly: ignore [missing-import]
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,34 +11,18 @@ import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
+import joblib
 
 warnings.filterwarnings("ignore")
 
-def set_korean_font():
-    import urllib.request
-    import matplotlib.font_manager as fm
-    
-    font_path = "NanumGothic.ttf"
-    if not os.path.exists(font_path):
-        url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
-        try:
-            urllib.request.urlretrieve(url, font_path)
-        except Exception:
-            pass
-            
-    if os.path.exists(font_path):
-        fm.fontManager.addfont(font_path)
-        plt.rcParams["font.family"] = "NanumGothic"
-    else:
-        system = platform.system()
-        if system == "Windows":
-            plt.rcParams["font.family"] = "Malgun Gothic"
-        elif system == "Darwin":
-            plt.rcParams["font.family"] = "AppleGothic"
-            
-    plt.rcParams["axes.unicode_minus"] = False
+# 폰트지정
+plt.rcParams['font.family'] = 'Malgun Gothic'
 
-set_korean_font()
+# 마이너스 부호 깨짐 지정
+plt.rcParams['axes.unicode_minus'] = False
+
+# 숫자가 지수표현식으로 나올 때 지정
+pd.options.display.float_format = '{:.2f}'.format
 
 # =====================================================================
 # 1. Streamlit 테마 설정 및 스타일링 (다크 테마 & 에메랄드 네온 조합)
@@ -138,90 +123,30 @@ st.markdown("""
 # 2. 데이터 처리 및 모델 캐싱 함수 정의
 # =====================================================================
 @st.cache_resource
-def get_model_and_data():
+def load_saved_model():
+    model_path = "./model/bite_demand_prediction_model.pkl"
+    if not os.path.exists(model_path):
+        return None, f"모델 파일이 존재하지 않습니다. ({model_path})"
+    try:
+        model = joblib.load(model_path)
+        return model, None
+    except Exception as e:
+        return None, f"모델 로드 실패: {str(e)}"
+
+@st.cache_data
+def get_historical_data():
     RENTAL_FILE_INTG = "./source_data/processed/서울_2023-2025_공공자전거_이용정보_통합.csv"
-    WEATHER_FILE = "./source_data/processed/서울기상정보/2023-2025_서울_일별_기상정보_통합.csv"
+    if not os.path.exists(RENTAL_FILE_INTG):
+        return None, None, "데이터 파일이 존재하지 않습니다."
     
-    if not os.path.exists(RENTAL_FILE_INTG) or not os.path.exists(WEATHER_FILE):
-        return None, None, None, None, "데이터 파일이 존재하지 않습니다."
-
-    # 데이터 로드
-    rental_daily = pd.read_csv(RENTAL_FILE_INTG, encoding="cp949", parse_dates=["날짜"])
-    if 'Unnamed: 0' in rental_daily.columns:
-        rental_daily.drop(['Unnamed: 0'], axis=1, inplace=True)
-        
-    weather_raw = pd.read_csv(WEATHER_FILE, encoding="utf-8")
-    
-    # 기상 데이터 컬럼 표준화
-    WEATHER_KEYWORDS = [
-        ("일시", "날짜"),
-        ("평균기온", "평균기온"),
-        ("최고기온", "최고기온"),
-        ("최저기온", "최저기온"),
-        ("강수량", "강수량"),
-        ("최대풍속", "최대풍속"),
-        ("최저풍속", "최저풍속"),
-        ("평균풍속", "평균풍속"),
-        ("최저습도", "최저습도"),
-        ("최고습고", "최저습도"),
-        ("평균습도", "평균습도"),
-        ("일조", "일조"),
-        ("일사", "일사"),
-        ("적설", "적설량"),
-    ]
-    
-    def find_col(df, keyword):
-        key = keyword.replace(" ", "")
-        for col in df.columns:
-            if key in str(col).replace(" ", ""):
-                return col
-        return None
-
-    rename_map = {}
-    used_targets = set()
-    for keyword, target in WEATHER_KEYWORDS:
-        if target in used_targets:
-            continue
-        col = find_col(weather_raw, keyword)
-        if col is not None and col not in rename_map:
-            rename_map[col] = target
-            used_targets.add(target)
-            
-    weather_std = weather_raw[list(rename_map.keys())].rename(columns=rename_map)
-    weather_std["날짜"] = pd.to_datetime(weather_std["날짜"], errors="coerce")
-    if "강수량" in weather_std.columns:
-        weather_std["강수량"] = weather_std["강수량"].fillna(0)
-
-    # 데이터 병합
-    df = pd.merge(rental_daily, weather_std, on="날짜", how="inner")
-
-    # 결측치 보간
-    zero_fill_cols = ["강수량", "일조", "일사", "적설량"]
-    for col in zero_fill_cols:
-        if col in df.columns:
-            df[col] = df[col].fillna(0)
-            
-    interpolate_cols = [
-        c for c in df.select_dtypes(include=[np.number]).columns
-        if c not in zero_fill_cols + ["이용건수"]
-    ]
-    if interpolate_cols:
-        df[interpolate_cols] = df[interpolate_cols].interpolate(method="linear", limit_direction="both")
-        
-    fill_cols = [c for c in df.columns if c not in ["날짜", "이용건수"]]
-    for col in fill_cols:
-        if df[col].isna().any():
-            df[col] = df[col].ffill().bfill()
-            
-    df = df.dropna().reset_index(drop=True)
-    df = df[df["이용건수"] > 0].reset_index(drop=True)
-
-    # 파생 변수 추가
-    df["월"] = df["날짜"].dt.month
-    df["요일"] = df["날짜"].dt.weekday
-    df["is_weekend"] = df["요일"].isin([5, 6]).astype(int)
-    df["day_of_year"] = df["날짜"].dt.dayofyear
-    df["week_of_year"] = df["날짜"].dt.isocalendar().week.astype(int)
+    try:
+        df = pd.read_csv(RENTAL_FILE_INTG, encoding="cp949", parse_dates=["날짜"])
+        if 'Unnamed: 0' in df.columns:
+            df.drop(['Unnamed: 0'], axis=1, inplace=True)
+        df = df.dropna().reset_index(drop=True)
+        df = df[df["이용건수"] > 0].reset_index(drop=True)
+    except Exception as e:
+        return None, None, f"데이터 로드 실패: {str(e)}"
 
     # 공휴일
     holiday_dates = pd.to_datetime([
@@ -238,32 +163,18 @@ def get_model_and_data():
         "2025-09-06", "2025-09-07", "2025-09-08", "2025-10-03", "2025-10-09",
         "2025-12-25",
     ])
-    df["is_holiday"] = df["날짜"].isin(holiday_dates).astype(int)
-
-    features = [
-        "평균기온", "최고기온", "최저기온", "강수량", "최대풍속", "평균풍속",
-        "일조", "일사", "적설량", "월", "요일", "is_weekend", "day_of_year",
-        "week_of_year", "is_holiday"
-    ]
-    
-    X = df[features]
-    y = df["이용건수"]
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train)
-    
-    return model, features, df, holiday_dates, None
+    return df, holiday_dates, None
 
 
 # 데이터 및 모델 추출
-model, features, df_history, holiday_dates, error_msg = get_model_and_data()
+model, model_err = load_saved_model()
+df_history, holiday_dates, data_err = get_historical_data()
+features = ["평균기온", "강수량", "평균풍속", "일조합", "주말여부", "휴일여부"]
 
 # 에러 처리
-if error_msg:
-    st.error(f"❌ 데이터 로딩 및 모델 학습 실패: {error_msg}")
-    st.info("기존 ML 학습 스크립트를 먼저 실행하여 서울 공공자전거 통합 데이터를 구성해 주십시오.")
+if model_err or data_err:
+    st.error(f"❌ 데이터 로딩 및 모델 로드 실패: {model_err or data_err}")
+    st.info("기존 ML 학습 스크립트를 실행하여 모델 파일 및 통합 데이터를 구성해 주십시오.")
     st.stop()
 
 
@@ -276,18 +187,12 @@ st.sidebar.markdown("### ⛅ 기상 및 시뮬레이션 설정")
 sim_date = st.sidebar.date_input("🗓️ 예측 대상 날짜", value=pd.Timestamp.now().date())
 sim_date_ts = pd.to_datetime(sim_date)
 
-# 2) 기온 시뮬레이션
+# 2) 기상 변수 설정 (모델 피처 동기화)
 mean_temp = st.sidebar.slider("🌡️ 평균 기온 (°C)", -20.0, 40.0, 15.0, 0.1)
-min_temp = st.sidebar.slider("🥶 최저 기온 (°C)", -25.0, 30.0, mean_temp - 5.0, 0.1)
-max_temp = st.sidebar.slider("🥵 최고 기온 (°C)", -10.0, 45.0, mean_temp + 5.0, 0.1)
-
-# 3) 강수 및 기타 기상 변수
 rain = st.sidebar.slider("☔ 일강수량 (mm)", 0.0, 150.0, 0.0, 0.5)
 wind_avg = st.sidebar.slider("💨 평균 풍속 (m/s)", 0.0, 10.0, 2.5, 0.1)
-wind_max = st.sidebar.slider("🌪️ 최대 풍속 (m/s)", 0.0, 15.0, wind_avg + 2.0, 0.1)
 sun_hours = st.sidebar.slider("☀️ 합계 일조시간 (hr)", 0.0, 14.0, 6.0, 0.1)
-solar_rad = st.sidebar.slider("⚡ 합계 일사량 (MJ/m²)", 0.0, 32.0, 14.0, 0.1)
-snow = st.sidebar.slider("❄️ 적설량 (cm)", 0.0, 30.0, 0.0, 0.1)
+
 
 
 # =====================================================================
@@ -300,24 +205,16 @@ day_of_year_val = sim_date_ts.dayofyear
 week_of_year_val = int(sim_date_ts.isocalendar()[1])
 is_holiday_val = 1 if sim_date_ts in holiday_dates else 0
 
-# 입력 데이터를 DataFrame 형태로 맵핑
+# 입력 데이터를 DataFrame 형태로 맵핑 (ipynb 피처 규격 적용)
 input_data = pd.DataFrame([{
     "평균기온": mean_temp,
-    "최고기온": max_temp,
-    "최저기온": min_temp,
     "강수량": rain,
-    "최대풍속": wind_max,
     "평균풍속": wind_avg,
-    "일조": sun_hours,
-    "일사": solar_rad,
-    "적설량": snow,
-    "월": month,
-    "요일": day_of_week,
-    "is_weekend": is_weekend_val,
-    "day_of_year": day_of_year_val,
-    "week_of_year": week_of_year_val,
-    "is_holiday": is_holiday_val
+    "일조합": sun_hours,
+    "주말여부": is_weekend_val,
+    "휴일여부": is_holiday_val
 }])[features]
+
 
 # 랜덤포레스트 수요 예측 실행
 predicted_demand = int(model.predict(input_data)[0])
@@ -384,13 +281,7 @@ with col1:
             <div class="info-content">비가 예보되어 노면이 미끄러워집니다. 자전거 대여 건수가 평소 대비 급락할 확률이 높습니다.</div>
         </div>
         """, unsafe_allow_html=True)
-    if snow > 0:
-        st.markdown(f"""
-        <div class="info-card notranslate" style="border-color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.05);">
-            <div class="info-title" style="color: #F8FAFC;">❄️ 적설 주의보 : {snow} cm</div>
-            <div class="info-content">눈이 쌓여 빙판길이 우려됩니다. 안전상의 이유로 대여 수요가 급감합니다.</div>
-        </div>
-        """, unsafe_allow_html=True)
+
 
 
 # ----------------- Col 2: 시뮬레이션 및 모델 리포트 -----------------
@@ -407,10 +298,9 @@ with col2:
         temp_range = np.linspace(-15, 38, 54)
         sim_df = pd.DataFrame([input_data.iloc[0].copy() for _ in temp_range])
         sim_df["평균기온"] = temp_range
-        sim_df["최고기온"] = temp_range + 5.0
-        sim_df["최저기온"] = temp_range - 5.0
         
         sim_predictions = model.predict(sim_df[features])
+
         
         # Plotly 또는 Matplotlib 시각화
         fig, ax = plt.subplots(figsize=(8, 4), facecolor="#0E1117")
