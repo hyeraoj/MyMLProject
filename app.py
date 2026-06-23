@@ -132,15 +132,25 @@ st.markdown("""
 # 2. 데이터 처리 및 모델 캐싱 함수 정의
 # =====================================================================
 @st.cache_resource
-def load_saved_model():
+def load_model_resources():
     model_path = "./model/bite_demand_prediction_model.pkl"
-    if not os.path.exists(model_path):
-        return None, f"모델 파일이 존재하지 않습니다. ({model_path})"
+    scaler_path = "./model/scaler.pkl"
+    features_path = "./model/features.pkl"
+    
+    missing = []
+    for p in [model_path, scaler_path, features_path]:
+        if not os.path.exists(p):
+            missing.append(p)
+    if missing:
+        return None, None, None, f"필수 파일이 존재하지 않습니다: {', '.join(missing)}"
+        
     try:
         model = joblib.load(model_path)
-        return model, None
+        scaler = joblib.load(scaler_path)
+        features = joblib.load(features_path)
+        return model, scaler, features, None
     except Exception as e:
-        return None, f"모델 로드 실패: {str(e)}"
+        return None, None, None, f"모델 자원 로드 실패: {str(e)}"
 
 @st.cache_data
 def get_historical_data():
@@ -175,10 +185,9 @@ def get_historical_data():
     return df, holiday_dates, None
 
 
-# 데이터 및 모델 추출
-model, model_err = load_saved_model()
+# 데이터 및 모델/스케일러/피처 추출
+model, scaler, features, model_err = load_model_resources()
 df_history, holiday_dates, data_err = get_historical_data()
-features = ["평균기온", "강수량", "평균풍속", "일조합", "주말여부", "휴일여부"]
 
 # 에러 처리
 if model_err or data_err:
@@ -214,19 +223,37 @@ day_of_year_val = sim_date_ts.dayofyear
 week_of_year_val = int(sim_date_ts.isocalendar()[1])
 is_holiday_val = 1 if sim_date_ts in holiday_dates else 0
 
-# 입력 데이터를 DataFrame 형태로 맵핑 (ipynb 피처 규격 적용)
-input_data = pd.DataFrame([{
+# 예측 대상 날짜의 '월' 정보를 추출합니다 (예: 6월 -> 6)
+sim_month = sim_date_ts.month
+
+# 예측 모델에 입력할 데이터 구조를 정의합니다 (기상 데이터 및 주말/공휴일 여부)
+input_row = {
     "평균기온": mean_temp,
     "강수량": rain,
     "평균풍속": wind_avg,
     "일조합": sun_hours,
     "주말여부": is_weekend_val,
     "휴일여부": is_holiday_val
-}])[features]
+}
 
+# 월 변수 원핫인코딩을 수동으로 수행합니다.
+# 1월부터 12월까지의 키를 '월_1', ... '월_12'로 만들어 기본값 0으로 채우고,
+# 사용자가 선택한 예측 대상 날짜의 해당 월에만 1을 할당합니다.
+for m in range(1, 13):
+    col_name = f"월_{m}"
+    if sim_month == m:
+        input_row[col_name] = 1
+    else:
+        input_row[col_name] = 0
 
-# 랜덤포레스트 수요 예측 실행
-predicted_demand = int(model.predict(input_data)[0])
+# 입력 데이터를 DataFrame 형태로 맵핑하고 독립변수(features) 순서대로 정렬합니다.
+input_data = pd.DataFrame([input_row])[features]
+
+# 학습할 때 적용한 것과 동일한 StandardScaler를 사용하여 기상변수 및 원핫인코딩 피처를 스케일링합니다.
+input_data_scaled = pd.DataFrame(scaler.transform(input_data), columns=features)
+
+# 랜덤포레스트 수요 예측 실행 (스케일링된 입력을 사용하고 로그 변환값을 원래 단위인 대여량 수치로 복원)
+predicted_demand = int(max(0, np.expm1(model.predict(input_data_scaled)[0])))
 
 
 # =====================================================================
@@ -308,7 +335,11 @@ with col2:
         sim_df = pd.DataFrame([input_data.iloc[0].copy() for _ in temp_range])
         sim_df["평균기온"] = temp_range
         
-        sim_predictions = model.predict(sim_df[features])
+        # 시뮬레이션 데이터를 scaler를 사용하여 동일하게 스케일링합니다.
+        sim_df_scaled = pd.DataFrame(scaler.transform(sim_df[features]), columns=features)
+        
+        # 시뮬레이션 예측값에 대해 지수함수 역변환을 가해 원래 단위로 복원합니다.
+        sim_predictions = np.expm1(model.predict(sim_df_scaled))
 
         
         # Plotly 또는 Matplotlib 시각화
